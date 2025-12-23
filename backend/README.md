@@ -79,5 +79,5 @@ curl http://localhost:8080/edges
 ## Библиотеки
 
 Проект использует:
-- [Gin](https://github.com/gin-gonic/gin) - HTTP веб-фреймворк
-- `encoding/xml` - стандартная библиотека Go для парсинга XML
+- [Gin](https://github.com/gin-gonic/gin) v1.11.0 - HTTP веб-фреймворк
+- [graphml](https://github.com/freddy33/graphml) v1.0.0 - библиотека для парсинга GraphML файлов

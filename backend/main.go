@@ -4,40 +4,13 @@ import (
 	"encoding/json"
 	"encoding/xml"
 	"fmt"
-	"io/ioutil"
 	"log"
 	"net/http"
+	"os"
 
+	"github.com/freddy33/graphml"
 	"github.com/gin-gonic/gin"
 )
-
-// GraphML структуры для парсинга XML
-type GraphML struct {
-	XMLName xml.Name `xml:"graphml"`
-	Graph   Graph    `xml:"graph"`
-}
-
-type Graph struct {
-	Nodes []Node `xml:"node"`
-	Edges []Edge `xml:"edge"`
-}
-
-type Node struct {
-	ID   string `xml:"id,attr"`
-	Data []Data `xml:"data"`
-}
-
-type Edge struct {
-	ID     string `xml:"id,attr"`
-	Source string `xml:"source,attr"`
-	Target string `xml:"target,attr"`
-	Data   []Data `xml:"data"`
-}
-
-type Data struct {
-	Key   string `xml:"key,attr"`
-	Value string `xml:",chardata"`
-}
 
 // Структуры для ответа
 type NodeInfo struct {
@@ -58,18 +31,43 @@ type GraphResponse struct {
 	Edges []EdgeInfo `json:"edges"`
 }
 
-func parseGraphML(filename string) (*GraphResponse, error) {
-	// Читаем файл
-	xmlFile, err := ioutil.ReadFile(filename)
-	if err != nil {
-		return nil, fmt.Errorf("ошибка чтения файла: %v", err)
+// Извлекает строковое значение из Data
+func getDataValue(data graphml.Data) string {
+	reader := data.Reader()
+	for {
+		token, err := reader.Token()
+		if err != nil {
+			break
+		}
+		if charData, ok := token.(xml.CharData); ok {
+			return string(charData)
+		}
 	}
+	return ""
+}
 
-	// Парсим XML
-	var graphML GraphML
-	err = xml.Unmarshal(xmlFile, &graphML)
+// Получает значение data по ключу
+func getDataByKey(dataList []graphml.Data, key string) string {
+	for _, data := range dataList {
+		if data.Key == key {
+			return getDataValue(data)
+		}
+	}
+	return ""
+}
+
+func parseGraphML(filename string) (*GraphResponse, error) {
+	// Открываем файл
+	file, err := os.Open(filename)
 	if err != nil {
-		return nil, fmt.Errorf("ошибка парсинга XML: %v", err)
+		return nil, fmt.Errorf("ошибка открытия файла: %v", err)
+	}
+	defer file.Close()
+
+	// Парсим GraphML с помощью библиотеки freddy33/graphml
+	doc, err := graphml.Decode(file)
+	if err != nil {
+		return nil, fmt.Errorf("ошибка парсинга GraphML: %v", err)
 	}
 
 	response := &GraphResponse{
@@ -77,51 +75,46 @@ func parseGraphML(filename string) (*GraphResponse, error) {
 		Edges: make([]EdgeInfo, 0),
 	}
 
-	// Собираем информацию о нодах
-	for _, node := range graphML.Graph.Nodes {
-		nodeInfo := NodeInfo{
-			ID: node.ID,
-		}
-
-		// Ищем label в данных ноды
-		for _, data := range node.Data {
-			if data.Key == "n_label" {
-				nodeInfo.Label = data.Value
-				break
+	// Проходим по всем графам в документе
+	for _, graph := range doc.Graphs {
+		// Собираем информацию о нодах
+		for _, node := range graph.Nodes {
+			nodeInfo := NodeInfo{
+				ID: node.ID,
 			}
-		}
 
-		// Если label не найден, используем ID
-		if nodeInfo.Label == "" {
-			nodeInfo.Label = node.ID
-		}
-
-		response.Nodes = append(response.Nodes, nodeInfo)
-	}
-
-	// Собираем информацию о рёбрах
-	for _, edge := range graphML.Graph.Edges {
-		edgeInfo := EdgeInfo{
-			ID:     edge.ID,
-			Source: edge.Source,
-			Target: edge.Target,
-			Pair:   fmt.Sprintf("%s -> %s", edge.Source, edge.Target),
-		}
-
-		// Ищем label в данных ребра
-		for _, data := range edge.Data {
-			if data.Key == "e_label" {
-				edgeInfo.Label = data.Value
-				break
+			// Ищем label в данных ноды
+			label := getDataByKey(node.Data, "n_label")
+			if label != "" {
+				nodeInfo.Label = label
+			} else {
+				// Если label не найден, используем ID
+				nodeInfo.Label = node.ID
 			}
+
+			response.Nodes = append(response.Nodes, nodeInfo)
 		}
 
-		// Если label не найден, используем ID
-		if edgeInfo.Label == "" {
-			edgeInfo.Label = edge.ID
-		}
+		// Собираем информацию о рёбрах
+		for _, edge := range graph.Edges {
+			edgeInfo := EdgeInfo{
+				ID:     edge.ID,
+				Source: edge.Source,
+				Target: edge.Target,
+				Pair:   fmt.Sprintf("%s -> %s", edge.Source, edge.Target),
+			}
 
-		response.Edges = append(response.Edges, edgeInfo)
+			// Ищем label в данных ребра
+			label := getDataByKey(edge.Data, "e_label")
+			if label != "" {
+				edgeInfo.Label = label
+			} else {
+				// Если label не найден, используем ID
+				edgeInfo.Label = edge.ID
+			}
+
+			response.Edges = append(response.Edges, edgeInfo)
+		}
 	}
 
 	return response, nil
