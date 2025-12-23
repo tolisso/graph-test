@@ -1,12 +1,12 @@
 package main
 
 import (
-	"encoding/json"
 	"encoding/xml"
 	"fmt"
+	"io"
 	"log"
 	"net/http"
-	"os"
+	"strings"
 
 	"github.com/freddy33/graphml"
 	"github.com/gin-gonic/gin"
@@ -29,6 +29,11 @@ type EdgeInfo struct {
 type GraphResponse struct {
 	Nodes []NodeInfo `json:"nodes"`
 	Edges []EdgeInfo `json:"edges"`
+}
+
+// Структура для принятия GraphML строки
+type GraphMLRequest struct {
+	GraphML string `json:"graphml" binding:"required"`
 }
 
 // Извлекает строковое значение из Data
@@ -56,18 +61,11 @@ func getDataByKey(dataList []graphml.Data, key string) string {
 	return ""
 }
 
-func parseGraphML(filename string) (*GraphResponse, error) {
-	// Открываем файл
-	file, err := os.Open(filename)
-	if err != nil {
-		return nil, fmt.Errorf("ошибка открытия файла: %v", err)
-	}
-	defer file.Close()
-
+func parseGraphML(reader io.Reader) (*GraphResponse, error) {
 	// Парсим GraphML с помощью библиотеки freddy33/graphml
-	doc, err := graphml.Decode(file)
+	doc, err := graphml.Decode(reader)
 	if err != nil {
-		return nil, fmt.Errorf("ошибка парсинга GraphML: %v", err)
+		return nil, err
 	}
 
 	response := &GraphResponse{
@@ -121,68 +119,38 @@ func parseGraphML(filename string) (*GraphResponse, error) {
 }
 
 func main() {
-	// Парсим GraphML файл при запуске
-	graphData, err := parseGraphML("sample.graphml")
-	if err != nil {
-		log.Fatalf("Ошибка парсинга GraphML: %v", err)
-	}
-
-	// Выводим данные в консоль
-	fmt.Println("=== NODES ===")
-	fmt.Printf("Всего нод: %d\n\n", len(graphData.Nodes))
-	for i, node := range graphData.Nodes {
-		fmt.Printf("%d. ID: %s, Label: %s\n", i+1, node.ID, node.Label)
-	}
-
-	fmt.Println("\n=== EDGES ===")
-	fmt.Printf("Всего рёбер: %d\n\n", len(graphData.Edges))
-	for i, edge := range graphData.Edges {
-		fmt.Printf("%d. ID: %s, Label: %s, Pair: %s\n", i+1, edge.ID, edge.Label, edge.Pair)
-	}
-
-	// Выводим JSON для удобства
-	fmt.Println("\n=== JSON OUTPUT ===")
-	jsonData, _ := json.MarshalIndent(graphData, "", "  ")
-	fmt.Println(string(jsonData))
-
 	// Настраиваем Gin
 	r := gin.Default()
 
-	// API endpoint для получения данных графа
-	r.GET("/graph", func(c *gin.Context) {
+	// Единственная ручка для парсинга GraphML
+	r.POST("/parse", func(c *gin.Context) {
+		var req GraphMLRequest
+
+		// Читаем JSON с GraphML строкой
+		if err := c.ShouldBindJSON(&req); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{
+				"error": "Invalid request: " + err.Error(),
+			})
+			return
+		}
+
+		// Парсим GraphML строку
+		reader := strings.NewReader(req.GraphML)
+		graphData, err := parseGraphML(reader)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{
+				"error": "Failed to parse GraphML: " + err.Error(),
+			})
+			return
+		}
+
+		// Возвращаем JSON с графом
 		c.JSON(http.StatusOK, graphData)
 	})
 
-	// API endpoint для получения только нод
-	r.GET("/nodes", func(c *gin.Context) {
-		c.JSON(http.StatusOK, gin.H{
-			"nodes": graphData.Nodes,
-			"count": len(graphData.Nodes),
-		})
-	})
-
-	// API endpoint для получения только рёбер
-	r.GET("/edges", func(c *gin.Context) {
-		c.JSON(http.StatusOK, gin.H{
-			"edges": graphData.Edges,
-			"count": len(graphData.Edges),
-		})
-	})
-
-	// Корневой маршрут
-	r.GET("/", func(c *gin.Context) {
-		c.JSON(http.StatusOK, gin.H{
-			"message": "GraphML Parser API",
-			"endpoints": []string{
-				"GET /graph - получить весь граф",
-				"GET /nodes - получить только ноды",
-				"GET /edges - получить только рёбра",
-			},
-		})
-	})
-
 	// Запускаем сервер
-	fmt.Println("\n=== Starting Gin server on :8080 ===")
+	log.Println("Starting GraphML Parser API on :8080")
+	log.Println("POST /parse - принимает GraphML строку и возвращает JSON граф")
 	if err := r.Run(":8080"); err != nil {
 		log.Fatalf("Ошибка запуска сервера: %v", err)
 	}

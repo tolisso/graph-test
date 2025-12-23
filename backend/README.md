@@ -1,6 +1,6 @@
-# GraphML Parser
+# GraphML Parser API
 
-Go Gin проект для парсинга GraphML файлов.
+Go Gin REST API для парсинга GraphML строк и возврата структурированных данных графа в JSON формате.
 
 ## Требования
 
@@ -26,55 +26,85 @@ cd backend
 $HOME/go1.23.5/bin/go run main.go
 ```
 
-При запуске приложение:
-1. Парсит файл `sample.graphml`
-2. Выводит в консоль два массива:
-   - Список нод (ID и название)
-   - Список рёбер (ID, название и пара вершин, которые они соединяют)
-3. Выводит JSON представление данных
-4. Запускает Gin веб-сервер на порту 8080
+Сервер запустится на порту 8080.
 
-## API Endpoints
+## API
 
-После запуска доступны следующие endpoints:
+### POST /parse
 
-- `GET /` - информация об API
-- `GET /graph` - получить весь граф (ноды и рёбра)
-- `GET /nodes` - получить только ноды
-- `GET /edges` - получить только рёбра
+Принимает GraphML строку и возвращает JSON с данными графа.
 
-Примеры запросов:
+**Request:**
+```json
+{
+  "graphml": "<?xml version=\"1.0\"?>...<graphml>...</graphml>"
+}
+```
+
+**Response:**
+```json
+{
+  "nodes": [
+    {
+      "id": "svc_api",
+      "label": "API Gateway"
+    },
+    ...
+  ],
+  "edges": [
+    {
+      "id": "e1",
+      "label": "login/refresh",
+      "source": "svc_api",
+      "target": "svc_auth",
+      "pair": "svc_api -> svc_auth"
+    },
+    ...
+  ]
+}
+```
+
+## Пример использования
+
+### С помощью curl:
+
 ```bash
-curl http://localhost:8080/
-curl http://localhost:8080/graph
-curl http://localhost:8080/nodes
-curl http://localhost:8080/edges
+# Создаем JSON запрос из GraphML файла
+python3 -c "import json; print(json.dumps({'graphml': open('sample.graphml').read()}))" > request.json
+
+# Отправляем запрос
+curl -X POST http://localhost:8080/parse \
+  -H "Content-Type: application/json" \
+  -d @request.json
+```
+
+### С помощью Python:
+
+```python
+import requests
+import json
+
+# Читаем GraphML файл
+with open('sample.graphml', 'r') as f:
+    graphml_content = f.read()
+
+# Отправляем запрос
+response = requests.post(
+    'http://localhost:8080/parse',
+    json={'graphml': graphml_content}
+)
+
+# Получаем результат
+graph_data = response.json()
+print(f"Nodes: {len(graph_data['nodes'])}")
+print(f"Edges: {len(graph_data['edges'])}")
 ```
 
 ## Структура проекта
 
 - `main.go` - основной файл приложения
-- `sample.graphml` - пример GraphML файла для парсинга
+- `sample.graphml` - пример GraphML файла для тестирования
 - `go.mod` - файл зависимостей Go
-
-## Пример вывода
-
-При запуске вы увидите:
-```
-=== NODES ===
-Всего нод: 9
-
-1. ID: svc_api, Label: API Gateway
-2. ID: svc_auth, Label: Auth Service
-...
-
-=== EDGES ===
-Всего рёбер: 8
-
-1. ID: e1, Label: login/refresh, Pair: svc_api -> svc_auth
-2. ID: e2, Label: create order, Pair: svc_api -> svc_orders
-...
-```
 
 ## Библиотеки
 
