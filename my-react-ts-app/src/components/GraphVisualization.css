@@ -1,0 +1,69 @@
+.graph-visualization {
+  width: 100%;
+  height: calc(100vh - 200px);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.graph-info {
+  display: flex;
+  gap: 20px;
+  padding: 10px 20px;
+  background: white;
+  border-radius: 8px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+.info-item {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.info-label {
+  font-weight: 600;
+  color: #4a5568;
+}
+
+.info-value {
+  font-weight: 700;
+  color: #667eea;
+  font-size: 18px;
+}
+
+.flow-container {
+  flex: 1;
+  background: white;
+  border-radius: 8px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  overflow: hidden;
+}
+
+/* Стили для React Flow */
+.react-flow__node {
+  cursor: grab;
+}
+
+.react-flow__node:active {
+  cursor: grabbing;
+}
+
+.react-flow__edge-path {
+  stroke-width: 2;
+}
+
+.react-flow__edge-text {
+  font-size: 12px;
+}
+
+.react-flow__controls {
+  button {
+    background: white;
+    border: 1px solid #ddd;
+
+    &:hover {
+      background: #f7f7f7;
+    }
+  }
+}

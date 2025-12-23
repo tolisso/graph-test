@@ -1,35 +1,36 @@
-import { useState } from 'react'
-import reactLogo from './assets/react.svg'
-import viteLogo from '/vite.svg'
-import './App.css'
+import { useState } from 'react';
+import { FileUploader } from './components/FileUploader';
+import { GraphVisualization } from './components/GraphVisualization';
+import type {GraphData} from './types';
+import './App.css';
 
 function App() {
-  const [count, setCount] = useState(0)
+  const [graphData, setGraphData] = useState<GraphData | null>(null);
+
+  const handleGraphLoaded = (data: GraphData) => {
+    setGraphData(data);
+  };
 
   return (
-    <>
-      <div>
-        <a href="https://vite.dev" target="_blank">
-          <img src={viteLogo} className="logo" alt="Vite logo" />
-        </a>
-        <a href="https://react.dev" target="_blank">
-          <img src={reactLogo} className="logo react" alt="React logo" />
-        </a>
-      </div>
-      <h1>Vite + React</h1>
-      <div className="card">
-        <button onClick={() => setCount((count) => count + 1)}>
-          count is {count}
-        </button>
-        <p>
-          Edit <code>src/App.tsx</code> and save to test HMR
-        </p>
-      </div>
-      <p className="read-the-docs">
-        Click on the Vite and React logos to learn more
-      </p>
-    </>
-  )
+    <div className="app">
+      <header className="app-header">
+        <h1>GraphML Visualizer</h1>
+        <p>Upload a GraphML file to visualize your graph</p>
+      </header>
+
+      <FileUploader onGraphLoaded={handleGraphLoaded} />
+
+      {graphData && <GraphVisualization graphData={graphData} />}
+
+      {!graphData && (
+        <div className="empty-state">
+          <div className="empty-icon">📊</div>
+          <h2>No graph loaded</h2>
+          <p>Upload a GraphML file to get started</p>
+        </div>
+      )}
+    </div>
+  );
 }
 
-export default App
+export default App;
