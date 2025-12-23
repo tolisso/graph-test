@@ -1,0 +1,226 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<graphml xmlns="http://graphml.graphdrawing.org/xmlns"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://graphml.graphdrawing.org/xmlns
+                             http://graphml.graphdrawing.org/xmlns/1.0/graphml.xsd">
+
+  <!-- Node attributes -->
+  <key id="n_label" for="node" attr.name="label" attr.type="string"/>
+  <key id="n_type" for="node" attr.name="type" attr.type="string"/>
+  <key id="n_env" for="node" attr.name="env" attr.type="string"/>
+  <key id="n_owner" for="node" attr.name="owner" attr.type="string"/>
+  <key id="n_tags" for="node" attr.name="tags" attr.type="string"/>
+  <key id="n_group" for="node" attr.name="group" attr.type="string"/>
+
+  <!-- Layout hints (optional, can be ignored by your renderer) -->
+  <key id="n_x" for="node" attr.name="x" attr.type="double"/>
+  <key id="n_y" for="node" attr.name="y" attr.type="double"/>
+
+  <!-- Edge attributes -->
+  <key id="e_label" for="edge" attr.name="label" attr.type="string"/>
+  <key id="e_kind" for="edge" attr.name="kind" attr.type="string"/>          <!-- sync/async/stream -->
+  <key id="e_proto" for="edge" attr.name="protocol" attr.type="string"/>     <!-- http/grpc/kafka/sql -->
+  <key id="e_crit" for="edge" attr.name="criticality" attr.type="string"/>   <!-- low/medium/high -->
+  <key id="e_weight" for="edge" attr.name="weight" attr.type="double"/>      <!-- for layout thickness -->
+  <key id="e_env" for="edge" attr.name="env" attr.type="string"/>            <!-- prod/stage/dev -->
+  <key id="e_tags" for="edge" attr.name="tags" attr.type="string"/>          <!-- comma-separated -->
+
+  <graph id="G" edgedefault="directed">
+
+    <!-- Nodes -->
+    <node id="svc_api">
+      <data key="n_label">API Gateway</data>
+      <data key="n_type">service</data>
+      <data key="n_env">prod</data>
+      <data key="n_owner">platform</data>
+      <data key="n_tags">entrypoint,auth,rate-limit</data>
+      <data key="n_group">edge</data>
+      <data key="n_x">0</data>
+      <data key="n_y">0</data>
+    </node>
+
+    <node id="svc_auth">
+      <data key="n_label">Auth Service</data>
+      <data key="n_type">service</data>
+      <data key="n_env">prod</data>
+      <data key="n_owner">security</data>
+      <data key="n_tags">oauth,jwt</data>
+      <data key="n_group">core</data>
+      <data key="n_x">200</data>
+      <data key="n_y">-120</data>
+    </node>
+
+    <node id="svc_orders">
+      <data key="n_label">Orders Service</data>
+      <data key="n_type">service</data>
+      <data key="n_env">prod</data>
+      <data key="n_owner">payments</data>
+      <data key="n_tags">orders,business</data>
+      <data key="n_group">core</data>
+      <data key="n_x">200</data>
+      <data key="n_y">0</data>
+    </node>
+
+    <node id="svc_billing">
+      <data key="n_label">Billing Service</data>
+      <data key="n_type">service</data>
+      <data key="n_env">prod</data>
+      <data key="n_owner">payments</data>
+      <data key="n_tags">invoices,charges</data>
+      <data key="n_group">core</data>
+      <data key="n_x">200</data>
+      <data key="n_y">120</data>
+    </node>
+
+    <node id="db_pg">
+      <data key="n_label">PostgreSQL</data>
+      <data key="n_type">db</data>
+      <data key="n_env">prod</data>
+      <data key="n_owner">data</data>
+      <data key="n_tags">oltp,primary</data>
+      <data key="n_group">storage</data>
+      <data key="n_x">420</data>
+      <data key="n_y">20</data>
+    </node>
+
+    <node id="cache_redis">
+      <data key="n_label">Redis Cache</data>
+      <data key="n_type">cache</data>
+      <data key="n_env">prod</data>
+      <data key="n_owner">platform</data>
+      <data key="n_tags">cache,sessions</data>
+      <data key="n_group">storage</data>
+      <data key="n_x">420</data>
+      <data key="n_y">-160</data>
+    </node>
+
+    <node id="q_kafka">
+      <data key="n_label">Kafka</data>
+      <data key="n_type">queue</data>
+      <data key="n_env">prod</data>
+      <data key="n_owner">platform</data>
+      <data key="n_tags">events,stream</data>
+      <data key="n_group">messaging</data>
+      <data key="n_x">420</data>
+      <data key="n_y">160</data>
+    </node>
+
+    <node id="svc_analytics">
+      <data key="n_label">Analytics Worker</data>
+      <data key="n_type">service</data>
+      <data key="n_env">stage</data>
+      <data key="n_owner">data</data>
+      <data key="n_tags">etl,reporting</data>
+      <data key="n_group">aux</data>
+      <data key="n_x">640</data>
+      <data key="n_y">160</data>
+    </node>
+
+    <node id="ext_payments">
+      <data key="n_label">External Payments</data>
+      <data key="n_type">external</data>
+      <data key="n_env">prod</data>
+      <data key="n_owner">vendor</data>
+      <data key="n_tags">third-party,psp</data>
+      <data key="n_group">external</data>
+      <data key="n_x">640</data>
+      <data key="n_y">120</data>
+    </node>
+
+    <!-- Edges -->
+    <edge id="e1" source="svc_api" target="svc_auth">
+      <data key="e_label">login/refresh</data>
+      <data key="e_kind">sync</data>
+      <data key="e_proto">http</data>
+      <data key="e_crit">high</data>
+      <data key="e_weight">2.0</data>
+      <data key="e_env">prod</data>
+      <data key="e_tags">auth,entry</data>
+    </edge>
+
+    <edge id="e2" source="svc_api" target="svc_orders">
+      <data key="e_label">create order</data>
+      <data key="e_kind">sync</data>
+      <data key="e_proto">grpc</data>
+      <data key="e_crit">high</data>
+      <data key="e_weight">2.5</data>
+      <data key="e_env">prod</data>
+      <data key="e_tags">orders,entry</data>
+    </edge>
+
+    <edge id="e3" source="svc_orders" target="db_pg">
+      <data key="e_label">read/write</data>
+      <data key="e_kind">sync</data>
+      <data key="e_proto">sql</data>
+      <data key="e_crit">high</data>
+      <data key="e_weight">3.0</data>
+      <data key="e_env">prod</data>
+      <data key="e_tags">storage,oltp</data>
+    </edge>
+
+    <edge id="e4" source="svc_auth" target="cache_redis">
+      <data key="e_label">sessions</data>
+      <data key="e_kind">sync</data>
+      <data key="e_proto">tcp</data>
+      <data key="e_crit">medium</data>
+      <data key="e_weight">1.5</data>
+      <data key="e_env">prod</data>
+      <data key="e_tags">cache,sessions</data>
+    </edge>
+
+    <edge id="e5" source="svc_orders" target="q_kafka">
+      <data key="e_label">OrderCreated</data>
+      <data key="e_kind">stream</data>
+      <data key="e_proto">kafka</data>
+      <data key="e_crit">medium</data>
+      <data key="e_weight">1.2</data>
+      <data key="e_env">prod</data>
+      <data key="e_tags">events,orders</data>
+    </edge>
+
+    <edge id="e6" source="q_kafka" target="svc_analytics">
+      <data key="e_label">consume events</data>
+      <data key="e_kind">stream</data>
+      <data key="e_proto">kafka</data>
+      <data key="e_crit">low</data>
+      <data key="e_weight">0.8</data>
+      <data key="e_env">stage</data>
+      <data key="e_tags">etl,events</data>
+    </edge>
+
+    <edge id="e7" source="svc_orders" target="svc_billing">
+      <data key="e_label">reserve/capture</data>
+      <data key="e_kind">async</data>
+      <data key="e_proto">grpc</data>
+      <data key="e_crit">high</data>
+      <data key="e_weight">2.2</data>
+      <data key="e_env">prod</data>
+      <data key="e_tags">payments,orders</data>
+    </edge>
+
+    <edge id="e8" source="svc_billing" target="ext_payments">
+      <data key="e_label">charge</data>
+      <data key="e_kind">sync</data>
+      <data key="e_proto">http</data>
+      <data key="e_crit">high</data>
+      <data key="e_weight">2.8</data>
+      <data key="e_env">prod</data>
+      <data key="e_tags">vendor,psp</data>
+    </edge>
+
+    <!-- A "broken" edge candidate: uncomment to test validation (missing target node) -->
+    <!--
+    <edge id="e_broken" source="svc_api" target="missing_node">
+      <data key="e_label">invalid ref</data>
+      <data key="e_kind">sync</data>
+      <data key="e_proto">http</data>
+      <data key="e_crit">low</data>
+      <data key="e_weight">0.1</data>
+      <data key="e_env">dev</data>
+      <data key="e_tags">validation</data>
+    </edge>
+    -->
+
+  </graph>
+</graphml>
+
