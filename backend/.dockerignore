@@ -2,4 +2,4 @@
 *.md
 .git
 .gitignore
-*.graphml
+test_*.graphml

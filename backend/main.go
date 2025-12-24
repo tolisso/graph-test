@@ -12,23 +12,42 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
+// Допустимые значения для валидации
+var (
+	validNodeTypes   = map[string]bool{"service": true, "db": true, "cache": true, "queue": true, "external": true}
+	validEdgeKinds   = map[string]bool{"sync": true, "async": true, "stream": true}
+	validCriticality = map[string]bool{"low": true, "medium": true, "high": true}
+)
+
 // Структуры для ответа
 type NodeInfo struct {
 	ID    string `json:"id"`
 	Label string `json:"label"`
+	Type  string `json:"type"`
 }
 
 type EdgeInfo struct {
-	ID     string `json:"id"`
-	Label  string `json:"label"`
-	Source string `json:"source"`
-	Target string `json:"target"`
-	Pair   string `json:"pair"`
+	ID          string `json:"id"`
+	Label       string `json:"label"`
+	Source      string `json:"source"`
+	Target      string `json:"target"`
+	Kind        string `json:"kind"`
+	Criticality string `json:"criticality"`
+	Pair        string `json:"pair"`
 }
 
 type GraphResponse struct {
 	Nodes []NodeInfo `json:"nodes"`
 	Edges []EdgeInfo `json:"edges"`
+}
+
+// Ошибка валидации
+type ValidationError struct {
+	Message string
+}
+
+func (e *ValidationError) Error() string {
+	return e.Message
 }
 
 // Структура для принятия GraphML строки
@@ -75,40 +94,108 @@ func parseGraphML(reader io.Reader) (*GraphResponse, error) {
 
 	// Проходим по всем графам в документе
 	for _, graph := range doc.Graphs {
+		// Создаем map для проверки существования нод
+		nodeExists := make(map[string]bool)
+
 		// Собираем информацию о нодах
 		for _, node := range graph.Nodes {
-			nodeInfo := NodeInfo{
-				ID: node.ID,
+			// Читаем обязательные поля
+			label := getDataByKey(node.Data, "n_label")
+			nodeType := getDataByKey(node.Data, "n_type")
+
+			// Валидация: label обязателен
+			if label == "" {
+				return nil, &ValidationError{
+					Message: fmt.Sprintf("node '%s': missing required field 'label'", node.ID),
+				}
 			}
 
-			// Ищем label в данных ноды
-			label := getDataByKey(node.Data, "n_label")
-			if label != "" {
-				nodeInfo.Label = label
-			} else {
-				// Если label не найден, используем ID
-				nodeInfo.Label = node.ID
+			// Валидация: type обязателен
+			if nodeType == "" {
+				return nil, &ValidationError{
+					Message: fmt.Sprintf("node '%s': missing required field 'type'", node.ID),
+				}
+			}
+
+			// Валидация: type должен быть из допустимых значений
+			if !validNodeTypes[nodeType] {
+				return nil, &ValidationError{
+					Message: fmt.Sprintf("node '%s': invalid type '%s', must be one of: service, db, cache, queue, external", node.ID, nodeType),
+				}
+			}
+
+			nodeInfo := NodeInfo{
+				ID:    node.ID,
+				Label: label,
+				Type:  nodeType,
 			}
 
 			response.Nodes = append(response.Nodes, nodeInfo)
+			nodeExists[node.ID] = true
 		}
 
 		// Собираем информацию о рёбрах
 		for _, edge := range graph.Edges {
-			edgeInfo := EdgeInfo{
-				ID:     edge.ID,
-				Source: edge.Source,
-				Target: edge.Target,
-				Pair:   fmt.Sprintf("%s -> %s", edge.Source, edge.Target),
+			// Валидация: source узел должен существовать
+			if !nodeExists[edge.Source] {
+				return nil, &ValidationError{
+					Message: fmt.Sprintf("edge '%s': source node '%s' does not exist", edge.ID, edge.Source),
+				}
 			}
 
-			// Ищем label в данных ребра
+			// Валидация: target узел должен существовать
+			if !nodeExists[edge.Target] {
+				return nil, &ValidationError{
+					Message: fmt.Sprintf("edge '%s': target node '%s' does not exist", edge.ID, edge.Target),
+				}
+			}
+
+			// Читаем поля
 			label := getDataByKey(edge.Data, "e_label")
-			if label != "" {
-				edgeInfo.Label = label
-			} else {
-				// Если label не найден, используем ID
-				edgeInfo.Label = edge.ID
+			kind := getDataByKey(edge.Data, "e_kind")
+			criticality := getDataByKey(edge.Data, "e_crit")
+
+			// Валидация: kind обязателен
+			if kind == "" {
+				return nil, &ValidationError{
+					Message: fmt.Sprintf("edge '%s': missing required field 'kind'", edge.ID),
+				}
+			}
+
+			// Валидация: criticality обязателен
+			if criticality == "" {
+				return nil, &ValidationError{
+					Message: fmt.Sprintf("edge '%s': missing required field 'criticality'", edge.ID),
+				}
+			}
+
+			// Валидация: kind должен быть из допустимых значений
+			if !validEdgeKinds[kind] {
+				return nil, &ValidationError{
+					Message: fmt.Sprintf("edge '%s': invalid kind '%s', must be one of: sync, async, stream", edge.ID, kind),
+				}
+			}
+
+			// Валидация: criticality должен быть из допустимых значений
+			if !validCriticality[criticality] {
+				return nil, &ValidationError{
+					Message: fmt.Sprintf("edge '%s': invalid criticality '%s', must be one of: low, medium, high", edge.ID, criticality),
+				}
+			}
+
+			// Используем label или ID если label не указан
+			if label == "" {
+				label = edge.ID
+			}
+
+			edgeInfo := EdgeInfo{
+				ID:          edge.ID,
+				Label:       label,
+				Source:      edge.Source,
+				Target:      edge.Target,
+				Kind:        kind,
+				Criticality: criticality,
+				Pair:        fmt.Sprintf("%s -> %s", edge.Source, edge.Target),
 			}
 
 			response.Edges = append(response.Edges, edgeInfo)

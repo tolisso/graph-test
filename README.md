@@ -24,7 +24,22 @@ graph/
 
 ## Быстрый старт
 
-### Автоматический запуск (рекомендуется)
+### Docker (рекомендуется)
+
+```bash
+docker-compose up -d
+```
+
+Приложение откроется на `http://localhost:3000`
+
+**Остановка:**
+```bash
+docker-compose down
+```
+
+См. [DOCKER.md](DOCKER.md) для подробной информации.
+
+### Автоматический запуск (без Docker)
 
 ```bash
 ./run.sh
@@ -76,6 +91,8 @@ npm run dev
 - ✅ REST API endpoint `POST /parse`
 - ✅ CORS поддержка для фронтенда
 - ✅ Извлечение узлов и рёбер с метаданными
+- ✅ Валидация GraphML данных (обязательные поля, допустимые значения)
+- ✅ Проверка существования узлов для рёбер
 
 ### Frontend (React + TypeScript)
 - ✅ Загрузка GraphML файлов через drag-and-drop или выбор
@@ -111,11 +128,15 @@ npm run dev
 }
 ```
 
-**Response:**
+**Response (Success):**
 ```json
 {
   "nodes": [
-    { "id": "svc_api", "label": "API Gateway" }
+    {
+      "id": "svc_api",
+      "label": "API Gateway",
+      "type": "service"
+    }
   ],
   "edges": [
     {
@@ -123,9 +144,18 @@ npm run dev
       "label": "login/refresh",
       "source": "svc_api",
       "target": "svc_auth",
+      "kind": "sync",
+      "criticality": "high",
       "pair": "svc_api -> svc_auth"
     }
   ]
+}
+```
+
+**Response (Validation Error):**
+```json
+{
+  "error": "Failed to parse GraphML: node 'n1': missing required field 'type'"
 }
 ```
 
@@ -157,11 +187,26 @@ npm run dev
 - ✅ Очистка портов 8080 и 5173
 - ✅ Удаление PID файлов
 
+## Валидация GraphML
+
+Backend выполняет строгую валидацию GraphML данных:
+
+**Обязательные поля:**
+- Node: `label`, `type` (service, db, cache, queue, external)
+- Edge: `kind` (sync, async, stream), `criticality` (low, medium, high)
+
+**Дополнительные проверки:**
+- Все `source` и `target` рёбер должны существовать в графе
+
+См. [VALIDATION.md](VALIDATION.md) для подробной информации и примеров.
+
 ## Разработка
 
 См. подробные инструкции:
 - [Backend README](backend/README.md)
 - [Frontend README](my-react-ts-app/FRONTEND_README.md)
+- [Docker Deployment](DOCKER.md)
+- [Validation Rules](VALIDATION.md)
 
 ## Лицензия
 
