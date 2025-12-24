@@ -1,0 +1,28 @@
+services:
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: graph-backend
+    restart: unless-stopped
+    networks:
+      - graph-network
+    environment:
+      - GIN_MODE=release
+
+  frontend:
+    build:
+      context: ./my-react-ts-app
+      dockerfile: Dockerfile
+    container_name: graph-frontend
+    restart: unless-stopped
+    ports:
+      - "3000:80"
+    networks:
+      - graph-network
+    depends_on:
+      - backend
+
+networks:
+  graph-network:
+    driver: bridge
