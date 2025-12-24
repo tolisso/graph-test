@@ -416,13 +416,15 @@ export const GraphVisualization = ({graphData}: GraphVisualizationProps) => {
 
     // Фильтрация тегов по поиску
     const filteredTags = useMemo(() => {
-        if (!tagSearchQuery) return [];
         const query = tagSearchQuery.toLowerCase();
-        return allTags.filter(tag =>
-            tag.toLowerCase().includes(query) &&
-            !includedTags.has(tag) &&
-            !excludedTags.has(tag)
-        );
+        return allTags.filter(tag => {
+            // Если есть поисковый запрос - фильтруем по нему
+            if (query && !tag.toLowerCase().includes(query)) {
+                return false;
+            }
+            // Не показываем уже добавленные теги
+            return !includedTags.has(tag) && !excludedTags.has(tag);
+        });
     }, [tagSearchQuery, allTags, includedTags, excludedTags]);
 
     return (
