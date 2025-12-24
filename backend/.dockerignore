@@ -3,3 +3,4 @@
 .git
 .gitignore
 test_*.graphml
+test_*.go
