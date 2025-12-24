@@ -1,4 +1,4 @@
-import {useCallback, useMemo} from 'react';
+import {useCallback, useMemo, useState, useEffect} from 'react';
 import ReactFlow, {
     type Node,
     type Edge,
@@ -37,7 +37,7 @@ const getNodeColor = (type: string): {bg: string, border: string} => {
     }
 };
 
-// Функция для автоматического расположения узлов (force-directed simulation)
+// Функция для автоматического расположения узлов
 const getAutoLayoutNodes = (nodes: Node[]): Node[] => {
     const nodeCount = nodes.length;
     const radius = Math.max(200, nodeCount * 30);
@@ -56,6 +56,43 @@ const getAutoLayoutNodes = (nodes: Node[]): Node[] => {
 };
 
 export const GraphVisualization = ({graphData}: GraphVisualizationProps) => {
+    // Фильтры
+    const [activeNodeTypes, setActiveNodeTypes] = useState<Set<string>>(new Set(['service', 'db', 'cache', 'queue', 'external']));
+    const [activeCriticality, setActiveCriticality] = useState<Set<string>>(new Set(['low', 'medium', 'high']));
+    const [activeEnv, setActiveEnv] = useState<Set<string>>(new Set());
+    const [activeTags, setActiveTags] = useState<Set<string>>(new Set());
+
+    // Извлекаем уникальные env и tags из данных
+    const {allEnvs, allTags} = useMemo(() => {
+        const envs = new Set<string>();
+        const tags = new Set<string>();
+
+        graphData.nodes.forEach(node => {
+            if (node.env) envs.add(node.env);
+            node.tags?.forEach(tag => tags.add(tag));
+        });
+
+        graphData.edges.forEach(edge => {
+            if (edge.env) envs.add(edge.env);
+            edge.tags?.forEach(tag => tags.add(tag));
+        });
+
+        return {
+            allEnvs: Array.from(envs).sort(),
+            allTags: Array.from(tags).sort()
+        };
+    }, [graphData]);
+
+    // Инициализируем фильтры env и tags при первой загрузке
+    useMemo(() => {
+        if (allEnvs.length > 0 && activeEnv.size === 0) {
+            setActiveEnv(new Set(allEnvs));
+        }
+        if (allTags.length > 0 && activeTags.size === 0) {
+            setActiveTags(new Set(allTags));
+        }
+    }, [allEnvs, allTags]);
+
     // Преобразуем данные графа в формат React Flow
     const initialNodes: Node[] = useMemo(() => {
         const nodes = graphData.nodes.map((node) => {
@@ -73,6 +110,7 @@ export const GraphVisualization = ({graphData}: GraphVisualizationProps) => {
                             </div>
                         </div>
                     ),
+                    nodeData: node,
                 },
                 position: {
                     x: node.x ?? 0,
@@ -105,7 +143,7 @@ export const GraphVisualization = ({graphData}: GraphVisualizationProps) => {
     const initialEdges: Edge[] = useMemo(
         () =>
             graphData.edges.map((edge) => {
-                // Вычисляем толщину ребра на основе веса (по умолчанию 2)
+                // Вычисляем толщину ребра на основе веса
                 const strokeWidth = edge.weight ? Math.max(1, Math.min(10, edge.weight)) : 2;
 
                 // Цвет и анимация на основе критичности
@@ -149,74 +187,270 @@ export const GraphVisualization = ({graphData}: GraphVisualizationProps) => {
                         fillOpacity: 0.95,
                     },
                     data: {
-                        kind: edge.kind,
-                        criticality: edge.criticality,
+                        edgeData: edge,
                     },
                 };
             }),
         [graphData.edges]
     );
 
-    const [nodes, , onNodesChange] = useNodesState(initialNodes);
-    const [edges, setEdges, onEdgesChange] = useEdgesState(initialEdges);
+    // Проверяем, активен ли узел
+    const isNodeActive = useCallback((nodeData: any) => {
+        // Фильтр по типу
+        if (!activeNodeTypes.has(nodeData.type)) return false;
+
+        // Фильтр по env (если есть env фильтры)
+        if (allEnvs.length > 0) {
+            // Если у узла есть env, проверяем что он в активных
+            if (nodeData.env) {
+                if (!activeEnv.has(nodeData.env)) return false;
+            }
+            // Если у узла нет env, но есть хоть один активный env - показываем узел
+            // Если все env отключены - скрываем узел без env тоже
+            else if (activeEnv.size === 0) {
+                return false;
+            }
+        }
+
+        // Фильтр по tags (если есть tag фильтры)
+        if (allTags.length > 0) {
+            if (nodeData.tags && nodeData.tags.length > 0) {
+                const hasMatchingTag = nodeData.tags.some((tag: string) => activeTags.has(tag));
+                if (!hasMatchingTag) return false;
+            }
+            // Если у узла нет тегов, но все теги отключены - скрываем
+            else if (activeTags.size === 0) {
+                return false;
+            }
+        }
+
+        return true;
+    }, [activeNodeTypes, activeEnv, activeTags, allEnvs, allTags]);
+
+    // Проверяем, активно ли ребро
+    const isEdgeActive = useCallback((edgeData: any, sourceActive: boolean, targetActive: boolean) => {
+        // Скрываем ребро если source или target неактивны
+        if (!sourceActive || !targetActive) return false;
+
+        // Фильтр по критичности
+        if (!activeCriticality.has(edgeData.criticality)) return false;
+
+        // Фильтр по env (если есть env фильтры)
+        if (allEnvs.length > 0) {
+            if (edgeData.env) {
+                if (!activeEnv.has(edgeData.env)) return false;
+            } else if (activeEnv.size === 0) {
+                return false;
+            }
+        }
+
+        // Фильтр по tags (если есть tag фильтры)
+        if (allTags.length > 0) {
+            if (edgeData.tags && edgeData.tags.length > 0) {
+                const hasMatchingTag = edgeData.tags.some((tag: string) => activeTags.has(tag));
+                if (!hasMatchingTag) return false;
+            } else if (activeTags.size === 0) {
+                return false;
+            }
+        }
+
+        return true;
+    }, [activeCriticality, activeEnv, activeTags, allEnvs, allTags]);
+
+    // Применяем фильтры как стили (все узлы показаны, но неактивные полупрозрачные)
+    const styledNodes = useMemo(() => {
+        return initialNodes.map(node => {
+            const active = isNodeActive(node.data.nodeData);
+            return {
+                ...node,
+                style: {
+                    ...node.style,
+                    opacity: active ? 1 : 0.25,
+                },
+            };
+        });
+    }, [initialNodes, isNodeActive]);
+
+    const styledEdges = useMemo(() => {
+        // Создаем map активности узлов
+        const nodeActivityMap = new Map();
+        initialNodes.forEach(node => {
+            nodeActivityMap.set(node.id, isNodeActive(node.data.nodeData));
+        });
+
+        return initialEdges.map(edge => {
+            const sourceActive = nodeActivityMap.get(edge.source) ?? true;
+            const targetActive = nodeActivityMap.get(edge.target) ?? true;
+            const active = isEdgeActive(edge.data.edgeData, sourceActive, targetActive);
+
+            return {
+                ...edge,
+                style: {
+                    ...edge.style,
+                    opacity: active ? 1 : 0.25,
+                },
+                labelStyle: {
+                    ...edge.labelStyle,
+                    opacity: active ? 1 : 0.25,
+                },
+            };
+        });
+    }, [initialEdges, initialNodes, isNodeActive, isEdgeActive]);
+
+    // Считаем активные узлы и рёбра для счётчика
+    const {activeNodesCount, activeEdgesCount} = useMemo(() => {
+        const activeNodes = styledNodes.filter(n => (n.style?.opacity ?? 1) === 1).length;
+        const activeEdges = styledEdges.filter(e => (e.style?.opacity ?? 1) === 1).length;
+        return {activeNodesCount: activeNodes, activeEdgesCount: activeEdges};
+    }, [styledNodes, styledEdges]);
+
+    const [nodes, setNodes, onNodesChange] = useNodesState(styledNodes);
+    const [edges, setEdges, onEdgesChange] = useEdgesState(styledEdges);
+
+    // Обновляем узлы и рёбра при изменении фильтров
+    useEffect(() => {
+        setNodes(styledNodes);
+    }, [styledNodes, setNodes]);
+
+    useEffect(() => {
+        setEdges(styledEdges);
+    }, [styledEdges, setEdges]);
 
     const onConnect = useCallback(
         (params: Connection) => setEdges((eds) => addEdge(params, eds)),
         [setEdges]
     );
 
+    // Функции для переключения фильтров
+    const toggleNodeType = (type: string) => {
+        setActiveNodeTypes(prev => {
+            const newSet = new Set(prev);
+            if (newSet.has(type)) {
+                newSet.delete(type);
+            } else {
+                newSet.add(type);
+            }
+            return newSet;
+        });
+    };
+
+    const toggleCriticality = (crit: string) => {
+        setActiveCriticality(prev => {
+            const newSet = new Set(prev);
+            if (newSet.has(crit)) {
+                newSet.delete(crit);
+            } else {
+                newSet.add(crit);
+            }
+            return newSet;
+        });
+    };
+
+    const toggleEnv = (env: string) => {
+        setActiveEnv(prev => {
+            const newSet = new Set(prev);
+            if (newSet.has(env)) {
+                newSet.delete(env);
+            } else {
+                newSet.add(env);
+            }
+            return newSet;
+        });
+    };
+
+    const toggleTag = (tag: string) => {
+        setActiveTags(prev => {
+            const newSet = new Set(prev);
+            if (newSet.has(tag)) {
+                newSet.delete(tag);
+            } else {
+                newSet.add(tag);
+            }
+            return newSet;
+        });
+    };
+
     return (
         <div className="graph-visualization">
             <div className="graph-info">
                 <div className="info-item">
                     <span className="info-label">Nodes:</span>
-                    <span className="info-value">{graphData.nodes.length}</span>
+                    <span className="info-value">{activeNodesCount} / {graphData.nodes.length}</span>
                 </div>
                 <div className="info-item">
                     <span className="info-label">Edges:</span>
-                    <span className="info-value">{graphData.edges.length}</span>
+                    <span className="info-value">{activeEdgesCount} / {graphData.edges.length}</span>
                 </div>
             </div>
 
             <div className="legend">
                 <div className="legend-section">
-                    <div className="legend-title">Node Types</div>
-                    <div className="legend-item">
-                        <span className="legend-color" style={{background: '#667eea'}}></span>
-                        <span>Service</span>
-                    </div>
-                    <div className="legend-item">
-                        <span className="legend-color" style={{background: '#f093fb'}}></span>
-                        <span>Database</span>
-                    </div>
-                    <div className="legend-item">
-                        <span className="legend-color" style={{background: '#4facfe'}}></span>
-                        <span>Cache</span>
-                    </div>
-                    <div className="legend-item">
-                        <span className="legend-color" style={{background: '#43e97b'}}></span>
-                        <span>Queue</span>
-                    </div>
-                    <div className="legend-item">
-                        <span className="legend-color" style={{background: '#fa709a'}}></span>
-                        <span>External</span>
-                    </div>
+                    <div className="legend-title">Node Types (click to filter)</div>
+                    {(['service', 'db', 'cache', 'queue', 'external'] as const).map(type => (
+                        <div
+                            key={type}
+                            className={`legend-item clickable ${!activeNodeTypes.has(type) ? 'inactive' : ''}`}
+                            onClick={() => toggleNodeType(type)}
+                        >
+                            <span className="legend-color" style={{background: getNodeColor(type).bg}}></span>
+                            <span>{type.charAt(0).toUpperCase() + type.slice(1)}</span>
+                        </div>
+                    ))}
                 </div>
+
                 <div className="legend-section">
-                    <div className="legend-title">Edge Criticality</div>
-                    <div className="legend-item">
-                        <span className="legend-line" style={{background: '#f5576c'}}></span>
-                        <span>High (animated)</span>
-                    </div>
-                    <div className="legend-item">
-                        <span className="legend-line" style={{background: '#ffa726'}}></span>
-                        <span>Medium</span>
-                    </div>
-                    <div className="legend-item">
-                        <span className="legend-line" style={{background: '#78909c'}}></span>
-                        <span>Low</span>
-                    </div>
+                    <div className="legend-title">Edge Criticality (click to filter)</div>
+                    {(['high', 'medium', 'low'] as const).map(crit => {
+                        const color = crit === 'high' ? '#f5576c' : crit === 'medium' ? '#ffa726' : '#78909c';
+                        return (
+                            <div
+                                key={crit}
+                                className={`legend-item clickable ${!activeCriticality.has(crit) ? 'inactive' : ''}`}
+                                onClick={() => toggleCriticality(crit)}
+                            >
+                                <span className="legend-line" style={{background: color}}></span>
+                                <span>{crit.charAt(0).toUpperCase() + crit.slice(1)}{crit === 'high' ? ' (animated)' : ''}</span>
+                            </div>
+                        );
+                    })}
                 </div>
+
+                {allEnvs.length > 0 && (
+                    <div className="legend-section">
+                        <div className="legend-title">Environment</div>
+                        {allEnvs.map(env => (
+                            <div
+                                key={env}
+                                className={`legend-item clickable ${!activeEnv.has(env) ? 'inactive' : ''}`}
+                                onClick={() => toggleEnv(env)}
+                            >
+                                <input
+                                    type="checkbox"
+                                    checked={activeEnv.has(env)}
+                                    readOnly
+                                />
+                                <span>{env}</span>
+                            </div>
+                        ))}
+                    </div>
+                )}
+
+                {allTags.length > 0 && (
+                    <div className="legend-section">
+                        <div className="legend-title">Tags</div>
+                        <div className="tags-container">
+                            {allTags.map(tag => (
+                                <div
+                                    key={tag}
+                                    className={`tag-chip ${!activeTags.has(tag) ? 'inactive' : ''}`}
+                                    onClick={() => toggleTag(tag)}
+                                >
+                                    {tag}
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+                )}
             </div>
 
             <div className="flow-container">

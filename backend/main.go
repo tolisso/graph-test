@@ -26,6 +26,8 @@ type NodeInfo struct {
 	Type  string   `json:"type"`
 	X     *float64 `json:"x,omitempty"`
 	Y     *float64 `json:"y,omitempty"`
+	Env   string   `json:"env,omitempty"`
+	Tags  []string `json:"tags,omitempty"`
 }
 
 type EdgeInfo struct {
@@ -36,6 +38,8 @@ type EdgeInfo struct {
 	Kind        string   `json:"kind"`
 	Criticality string   `json:"criticality"`
 	Weight      *float64 `json:"weight,omitempty"`
+	Env         string   `json:"env,omitempty"`
+	Tags        []string `json:"tags,omitempty"`
 	Pair        string   `json:"pair"`
 }
 
@@ -96,6 +100,25 @@ func parseFloat(s string) *float64 {
 	return &f
 }
 
+// Парсит теги из строки с запятыми
+func parseTags(s string) []string {
+	if s == "" {
+		return nil
+	}
+	tags := strings.Split(s, ",")
+	result := make([]string, 0, len(tags))
+	for _, tag := range tags {
+		trimmed := strings.TrimSpace(tag)
+		if trimmed != "" {
+			result = append(result, trimmed)
+		}
+	}
+	if len(result) == 0 {
+		return nil
+	}
+	return result
+}
+
 func parseGraphML(reader io.Reader) (*GraphResponse, error) {
 	// Парсим GraphML с помощью библиотеки freddy33/graphml
 	doc, err := graphml.Decode(reader)
@@ -140,9 +163,11 @@ func parseGraphML(reader io.Reader) (*GraphResponse, error) {
 				}
 			}
 
-			// Читаем опциональные координаты
+			// Читаем опциональные поля
 			x := parseFloat(getDataByKey(node.Data, "n_x"))
 			y := parseFloat(getDataByKey(node.Data, "n_y"))
+			env := getDataByKey(node.Data, "n_env")
+			tags := parseTags(getDataByKey(node.Data, "n_tags"))
 
 			nodeInfo := NodeInfo{
 				ID:    node.ID,
@@ -150,6 +175,8 @@ func parseGraphML(reader io.Reader) (*GraphResponse, error) {
 				Type:  nodeType,
 				X:     x,
 				Y:     y,
+				Env:   env,
+				Tags:  tags,
 			}
 
 			response.Nodes = append(response.Nodes, nodeInfo)
@@ -177,6 +204,8 @@ func parseGraphML(reader io.Reader) (*GraphResponse, error) {
 			kind := getDataByKey(edge.Data, "e_kind")
 			criticality := getDataByKey(edge.Data, "e_crit")
 			weight := parseFloat(getDataByKey(edge.Data, "e_weight"))
+			env := getDataByKey(edge.Data, "e_env")
+			tags := parseTags(getDataByKey(edge.Data, "e_tags"))
 
 			// Валидация: kind обязателен
 			if kind == "" {
@@ -219,6 +248,8 @@ func parseGraphML(reader io.Reader) (*GraphResponse, error) {
 				Kind:        kind,
 				Criticality: criticality,
 				Weight:      weight,
+				Env:         env,
+				Tags:        tags,
 				Pair:        fmt.Sprintf("%s -> %s", edge.Source, edge.Target),
 			}
 

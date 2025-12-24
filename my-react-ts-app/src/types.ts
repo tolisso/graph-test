@@ -5,6 +5,8 @@ export interface NodeInfo {
   type: string;
   x?: number;
   y?: number;
+  env?: string;
+  tags?: string[];
 }
 
 export interface EdgeInfo {
@@ -15,10 +17,19 @@ export interface EdgeInfo {
   kind: string;
   criticality: string;
   weight?: number;
+  env?: string;
+  tags?: string[];
   pair: string;
 }
 
 export interface GraphData {
   nodes: NodeInfo[];
   edges: EdgeInfo[];
+}
+
+export interface Filters {
+  nodeTypes: Set<string>;
+  criticality: Set<string>;
+  env: Set<string>;
+  tags: Set<string>;
 }
