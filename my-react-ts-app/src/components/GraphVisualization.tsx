@@ -60,7 +60,10 @@ export const GraphVisualization = ({graphData}: GraphVisualizationProps) => {
     const [activeNodeTypes, setActiveNodeTypes] = useState<Set<string>>(new Set(['service', 'db', 'cache', 'queue', 'external']));
     const [activeCriticality, setActiveCriticality] = useState<Set<string>>(new Set(['low', 'medium', 'high']));
     const [activeEnv, setActiveEnv] = useState<Set<string>>(new Set());
-    const [activeTags, setActiveTags] = useState<Set<string>>(new Set());
+    const [includedTags, setIncludedTags] = useState<Set<string>>(new Set()); // Обязательные теги
+    const [excludedTags, setExcludedTags] = useState<Set<string>>(new Set()); // Исключенные теги
+    const [tagSearchQuery, setTagSearchQuery] = useState<string>('');
+    const [showTagDropdown, setShowTagDropdown] = useState<boolean>(false);
 
     // Извлекаем уникальные env и tags из данных
     const {allEnvs, allTags} = useMemo(() => {
@@ -83,15 +86,12 @@ export const GraphVisualization = ({graphData}: GraphVisualizationProps) => {
         };
     }, [graphData]);
 
-    // Инициализируем фильтры env и tags при первой загрузке
+    // Инициализируем фильтры env при первой загрузке
     useMemo(() => {
         if (allEnvs.length > 0 && activeEnv.size === 0) {
             setActiveEnv(new Set(allEnvs));
         }
-        if (allTags.length > 0 && activeTags.size === 0) {
-            setActiveTags(new Set(allTags));
-        }
-    }, [allEnvs, allTags]);
+    }, [allEnvs]);
 
     // Преобразуем данные графа в формат React Flow
     const initialNodes: Node[] = useMemo(() => {
@@ -212,20 +212,28 @@ export const GraphVisualization = ({graphData}: GraphVisualizationProps) => {
             }
         }
 
-        // Фильтр по tags (если есть tag фильтры)
-        if (allTags.length > 0) {
-            if (nodeData.tags && nodeData.tags.length > 0) {
-                const hasMatchingTag = nodeData.tags.some((tag: string) => activeTags.has(tag));
-                if (!hasMatchingTag) return false;
+        // Фильтр по обязательным тегам (узел должен иметь ВСЕ includedTags)
+        if (includedTags.size > 0) {
+            const nodeTags = new Set(nodeData.tags || []);
+            for (const requiredTag of includedTags) {
+                if (!nodeTags.has(requiredTag)) {
+                    return false;
+                }
             }
-            // Если у узла нет тегов, но все теги отключены - скрываем
-            else if (activeTags.size === 0) {
-                return false;
+        }
+
+        // Фильтр по исключенным тегам (узел НЕ должен иметь НИ ОДИН из excludedTags)
+        if (excludedTags.size > 0) {
+            const nodeTags = nodeData.tags || [];
+            for (const excludedTag of excludedTags) {
+                if (nodeTags.includes(excludedTag)) {
+                    return false;
+                }
             }
         }
 
         return true;
-    }, [activeNodeTypes, activeEnv, activeTags, allEnvs, allTags]);
+    }, [activeNodeTypes, activeEnv, includedTags, excludedTags, allEnvs]);
 
     // Проверяем, активно ли ребро
     const isEdgeActive = useCallback((edgeData: any, sourceActive: boolean, targetActive: boolean) => {
@@ -244,18 +252,28 @@ export const GraphVisualization = ({graphData}: GraphVisualizationProps) => {
             }
         }
 
-        // Фильтр по tags (если есть tag фильтры)
-        if (allTags.length > 0) {
-            if (edgeData.tags && edgeData.tags.length > 0) {
-                const hasMatchingTag = edgeData.tags.some((tag: string) => activeTags.has(tag));
-                if (!hasMatchingTag) return false;
-            } else if (activeTags.size === 0) {
-                return false;
+        // Фильтр по обязательным тегам (ребро должно иметь ВСЕ includedTags)
+        if (includedTags.size > 0) {
+            const edgeTags = new Set(edgeData.tags || []);
+            for (const requiredTag of includedTags) {
+                if (!edgeTags.has(requiredTag)) {
+                    return false;
+                }
+            }
+        }
+
+        // Фильтр по исключенным тегам (ребро НЕ должно иметь НИ ОДИН из excludedTags)
+        if (excludedTags.size > 0) {
+            const edgeTags = edgeData.tags || [];
+            for (const excludedTag of excludedTags) {
+                if (edgeTags.includes(excludedTag)) {
+                    return false;
+                }
             }
         }
 
         return true;
-    }, [activeCriticality, activeEnv, activeTags, allEnvs, allTags]);
+    }, [activeCriticality, activeEnv, includedTags, excludedTags, allEnvs]);
 
     // Применяем фильтры как стили (все узлы показаны, но неактивные полупрозрачные)
     const styledNodes = useMemo(() => {
@@ -358,17 +376,54 @@ export const GraphVisualization = ({graphData}: GraphVisualizationProps) => {
         });
     };
 
-    const toggleTag = (tag: string) => {
-        setActiveTags(prev => {
+    // Добавить тег как обязательный
+    const addIncludedTag = (tag: string) => {
+        setIncludedTags(prev => new Set(prev).add(tag));
+        setExcludedTags(prev => {
             const newSet = new Set(prev);
-            if (newSet.has(tag)) {
-                newSet.delete(tag);
-            } else {
-                newSet.add(tag);
-            }
+            newSet.delete(tag);
+            return newSet;
+        });
+        setTagSearchQuery('');
+        setShowTagDropdown(false);
+    };
+
+    // Добавить тег как исключенный
+    const addExcludedTag = (tag: string) => {
+        setExcludedTags(prev => new Set(prev).add(tag));
+        setIncludedTags(prev => {
+            const newSet = new Set(prev);
+            newSet.delete(tag);
+            return newSet;
+        });
+        setTagSearchQuery('');
+        setShowTagDropdown(false);
+    };
+
+    // Удалить тег из фильтров
+    const removeTagFilter = (tag: string) => {
+        setIncludedTags(prev => {
+            const newSet = new Set(prev);
+            newSet.delete(tag);
+            return newSet;
+        });
+        setExcludedTags(prev => {
+            const newSet = new Set(prev);
+            newSet.delete(tag);
             return newSet;
         });
     };
+
+    // Фильтрация тегов по поиску
+    const filteredTags = useMemo(() => {
+        if (!tagSearchQuery) return [];
+        const query = tagSearchQuery.toLowerCase();
+        return allTags.filter(tag =>
+            tag.toLowerCase().includes(query) &&
+            !includedTags.has(tag) &&
+            !excludedTags.has(tag)
+        );
+    }, [tagSearchQuery, allTags, includedTags, excludedTags]);
 
     return (
         <div className="graph-visualization">
@@ -436,18 +491,77 @@ export const GraphVisualization = ({graphData}: GraphVisualizationProps) => {
                 )}
 
                 {allTags.length > 0 && (
-                    <div className="legend-section">
+                    <div className="legend-section tags-filter-section">
                         <div className="legend-title">Tags</div>
-                        <div className="tags-container">
-                            {allTags.map(tag => (
-                                <div
-                                    key={tag}
-                                    className={`tag-chip ${!activeTags.has(tag) ? 'inactive' : ''}`}
-                                    onClick={() => toggleTag(tag)}
-                                >
-                                    {tag}
+
+                        {/* Активные фильтры */}
+                        {(includedTags.size > 0 || excludedTags.size > 0) && (
+                            <div className="active-tag-filters">
+                                {Array.from(includedTags).map(tag => (
+                                    <div
+                                        key={`inc-${tag}`}
+                                        className="tag-filter-chip included"
+                                        onClick={() => removeTagFilter(tag)}
+                                        title="Click to remove filter"
+                                    >
+                                        {tag}
+                                        <span className="remove-icon">×</span>
+                                    </div>
+                                ))}
+                                {Array.from(excludedTags).map(tag => (
+                                    <div
+                                        key={`exc-${tag}`}
+                                        className="tag-filter-chip excluded"
+                                        onClick={() => removeTagFilter(tag)}
+                                        title="Click to remove filter"
+                                    >
+                                        {tag}
+                                        <span className="remove-icon">×</span>
+                                    </div>
+                                ))}
+                            </div>
+                        )}
+
+                        {/* Поиск тегов */}
+                        <div className="tag-search-container">
+                            <input
+                                type="text"
+                                className="tag-search-input"
+                                placeholder="Search tags..."
+                                value={tagSearchQuery}
+                                onChange={(e) => {
+                                    setTagSearchQuery(e.target.value);
+                                    setShowTagDropdown(true);
+                                }}
+                                onFocus={() => setShowTagDropdown(true)}
+                            />
+
+                            {/* Dropdown с результатами поиска */}
+                            {showTagDropdown && filteredTags.length > 0 && (
+                                <div className="tag-dropdown">
+                                    {filteredTags.slice(0, 10).map(tag => (
+                                        <div key={tag} className="tag-dropdown-item">
+                                            <span className="tag-name">{tag}</span>
+                                            <div className="tag-actions">
+                                                <button
+                                                    className="tag-action-btn include"
+                                                    onClick={() => addIncludedTag(tag)}
+                                                    title="Include (must have)"
+                                                >
+                                                    +
+                                                </button>
+                                                <button
+                                                    className="tag-action-btn exclude"
+                                                    onClick={() => addExcludedTag(tag)}
+                                                    title="Exclude (must not have)"
+                                                >
+                                                    −
+                                                </button>
+                                            </div>
+                                        </div>
+                                    ))}
                                 </div>
-                            ))}
+                            )}
                         </div>
                     </div>
                 )}
